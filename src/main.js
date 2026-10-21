@@ -2,8 +2,8 @@
 import Phaser from 'phaser';
 
 // =====================================================
-// EIHS DEFENSE — STEP 17
-// Two-Direction Walking + Spinning Sword Combat
+// EIHS DEFENSE — STEP 18
+// Eight-Direction Movement + Spinning Sword Combat
 // =====================================================
 
 const WIDTH = 960;
@@ -18,6 +18,7 @@ const ARENA = {
 
 const SETTINGS = {
   duration: 90,
+
   playerSpeed: 220,
   playerMaxHP: 100,
   contactDamage: 10,
@@ -40,17 +41,19 @@ const SETTINGS = {
   knockbackDuration: 180
 };
 
-// Directional artwork registry.
-// Add new PixelLab directions here as they're uploaded.
+// =====================================================
+// ALL EIGHT PIXELLAB WALKING ANIMATIONS
+// =====================================================
+
 const WALK_ART = {
-  S: {
-    texture: 'engineer-s',
-    file: '/eihs_engineer_s_walk_8frames.png'
-  },
-  SW: {
-    texture: 'engineer-sw',
-    file: '/eihs_engineer_sw_walk_8frames.png'
-  }
+  N: '/eihs_engineer_n_walk_8frames.png',
+  NE: '/eihs_engineer_ne_walk_8frames.png',
+  E: '/eihs_engineer_e_walk_8frames.png',
+  SE: '/eihs_engineer_se_walk_8frames.png',
+  S: '/eihs_engineer_s_walk_8frames.png',
+  SW: '/eihs_engineer_sw_walk_8frames.png',
+  W: '/eihs_engineer_w_walk_8frames.png',
+  NW: '/eihs_engineer_nw_walk_8frames.png'
 };
 
 class DefenseScene extends Phaser.Scene {
@@ -58,28 +61,44 @@ class DefenseScene extends Phaser.Scene {
     super('DefenseScene');
   }
 
+  // ===================================================
+  // LOAD PIXELLAB ARTWORK
+  // ===================================================
+
   preload() {
-    // Load available directional walking sheets
-    Object.values(WALK_ART).forEach(asset => {
+    Object.entries(WALK_ART).forEach(([dir, file]) => {
       this.load.spritesheet(
-        asset.texture,
-        asset.file,
-        { frameWidth: 256, frameHeight: 256 }
+        `engineer-${dir}`,
+        file,
+        {
+          frameWidth: 256,
+          frameHeight: 256
+        }
       );
     });
 
     this.load.spritesheet(
       'engineer-attack',
       '/eihs_engineer_sw_attack_8frames.png',
-      { frameWidth: 256, frameHeight: 256 }
+      {
+        frameWidth: 256,
+        frameHeight: 256
+      }
     );
 
     this.load.spritesheet(
       'slime',
       '/eihs_green_slime_walk_8frames.png',
-      { frameWidth: 56, frameHeight: 56 }
+      {
+        frameWidth: 56,
+        frameHeight: 56
+      }
     );
   }
+
+  // ===================================================
+  // CREATE GAME
+  // ===================================================
 
   create() {
     this.cameras.main.setBackgroundColor('#182337');
@@ -91,127 +110,181 @@ class DefenseScene extends Phaser.Scene {
       ARENA.bottom - ARENA.top
     );
 
+    // Arena floor
     this.add.rectangle(
-      480, 305, 900, 470, 0x202d42
+      480,
+      305,
+      900,
+      470,
+      0x202d42
     ).setStrokeStyle(3, 0x526b86);
 
-    this.add.text(480, 30, 'EIHS DEFENSE', {
-      fontSize: '28px',
-      color: '#f5c451',
-      fontFamily: 'monospace'
-    }).setOrigin(0.5);
+    // Title
+    this.add.text(
+      480,
+      30,
+      'EIHS DEFENSE',
+      {
+        fontSize: '28px',
+        color: '#f5c451',
+        fontFamily: 'monospace'
+      }
+    ).setOrigin(0.5);
 
-    // =========================================
-    // ANIMATIONS
-    // =========================================
+    // ======================================
+    // WALKING ANIMATIONS
+    // ======================================
 
-    Object.entries(WALK_ART).forEach(([direction, asset]) => {
+    Object.keys(WALK_ART).forEach(dir => {
       this.anims.create({
-        key: `walk-${direction}`,
+        key: `walk-${dir}`,
         frames: this.anims.generateFrameNumbers(
-          asset.texture,
-          { start: 0, end: 7 }
+          `engineer-${dir}`,
+          {
+            start: 0,
+            end: 7
+          }
         ),
         frameRate: 8,
         repeat: -1
       });
     });
 
+    // Sword attack
     this.anims.create({
       key: 'engineer-attack',
       frames: this.anims.generateFrameNumbers(
         'engineer-attack',
-        { start: 0, end: 7 }
+        {
+          start: 0,
+          end: 7
+        }
       ),
       frameRate: SETTINGS.attackFPS,
       repeat: 0
     });
 
+    // Slime movement
     this.anims.create({
       key: 'slime-move',
       frames: this.anims.generateFrameNumbers(
         'slime',
-        { start: 0, end: 7 }
+        {
+          start: 0,
+          end: 7
+        }
       ),
       frameRate: 8,
       repeat: -1
     });
 
-    // =========================================
+    // ======================================
     // GAME STATE
-    // =========================================
+    // ======================================
 
     this.hp = SETTINGS.playerMaxHP;
     this.kills = 0;
+
     this.gameOver = false;
     this.isAttacking = false;
     this.attackActive = false;
+
     this.elapsedMs = 0;
     this.spawnElapsedMs = 0;
+
     this.lastDamage = -1000;
     this.lastAttack = -SETTINGS.attackCooldown;
-    this.facingAngle = Math.PI / 2;
+
     this.facingDirection = 'S';
+    this.facingAngle = Math.PI / 2;
+
     this.hitThisSwing = new Set();
 
-    // =========================================
+    // ======================================
     // PLAYER
-    // =========================================
+    // ======================================
 
     this.player = this.physics.add.sprite(
-      480, 305, WALK_ART.S.texture, 0
+      480,
+      305,
+      'engineer-S',
+      0
     );
 
     this.player.setScale(0.55);
     this.player.setCollideWorldBounds(true);
+
     this.player.body.setSize(65, 85);
     this.player.body.setOffset(95, 125);
+
     this.player.setDepth(5);
 
-    // =========================================
-    // ATTACK INDICATOR
-    // =========================================
+    // ======================================
+    // VISIBLE ATTACK HITBOX
+    // ======================================
 
     this.attackIndicator = this.add.graphics();
     this.attackIndicator.setDepth(2);
 
-    this.player.on('animationupdate', (animation, frame) => {
-      if (
-        this.gameOver ||
-        !this.isAttacking ||
-        animation.key !== 'engineer-attack'
-      ) return;
+    // ======================================
+    // ATTACK ANIMATION EVENTS
+    // ======================================
 
-      const frameIndex = frame.index - 1;
+    this.player.on(
+      'animationupdate',
+      (animation, frame) => {
+        if (
+          this.gameOver ||
+          !this.isAttacking ||
+          animation.key !== 'engineer-attack'
+        ) {
+          return;
+        }
 
-      this.attackActive =
-        frameIndex >= SETTINGS.attackStartFrame &&
-        frameIndex <= SETTINGS.attackEndFrame;
+        const frameIndex = frame.index - 1;
 
-      if (!this.attackActive) {
-        this.attackIndicator.clear();
+        this.attackActive =
+          frameIndex >= SETTINGS.attackStartFrame &&
+          frameIndex <= SETTINGS.attackEndFrame;
+
+        if (this.attackActive) {
+          this.drawAttackIndicator();
+          this.checkSwordHits();
+        } else {
+          this.attackIndicator.clear();
+        }
       }
-    });
+    );
 
-    this.player.on('animationcomplete-engineer-attack', () => {
-      if (this.gameOver) return;
+    this.player.on(
+      'animationcomplete-engineer-attack',
+      () => {
+        if (this.gameOver) return;
 
-      this.isAttacking = false;
-      this.attackActive = false;
-      this.attackIndicator.clear();
-      this.player.setTexture(
-        WALK_ART[this.facingDirection]?.texture ||
-        WALK_ART.SW.texture,
-        0
-      );
-    });
+        this.isAttacking = false;
+        this.attackActive = false;
 
-    // =========================================
+        this.attackIndicator.clear();
+
+        // Return to last facing direction
+        this.player.setTexture(
+          `engineer-${this.facingDirection}`,
+          0
+        );
+      }
+    );
+
+    // ======================================
     // CONTROLS
-    // =========================================
+    // ======================================
 
-    this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
+    this.cursors =
+      this.input.keyboard.createCursorKeys();
+
+    this.keys =
+      this.input.keyboard.addKeys(
+        'W,A,S,D,SPACE'
+      );
 
     this.input.keyboard.addCapture([
       Phaser.Input.Keyboard.KeyCodes.SPACE,
@@ -222,14 +295,17 @@ class DefenseScene extends Phaser.Scene {
     ]);
 
     this.input.on('pointerdown', pointer => {
-      if (!this.gameOver) {
-        this.attack(pointer.worldX, pointer.worldY);
-      }
+      if (this.gameOver) return;
+
+      this.attack(
+        pointer.worldX,
+        pointer.worldY
+      );
     });
 
-    // =========================================
-    // SLIMES & COLLISION
-    // =========================================
+    // ======================================
+    // SLIMES
+    // ======================================
 
     this.slimes = this.physics.add.group();
 
@@ -241,9 +317,9 @@ class DefenseScene extends Phaser.Scene {
       this
     );
 
-    // =========================================
+    // ======================================
     // HUD
-    // =========================================
+    // ======================================
 
     const hudStyle = {
       fontSize: '18px',
@@ -252,61 +328,86 @@ class DefenseScene extends Phaser.Scene {
     };
 
     this.hpText = this.add.text(
-      45, 555, 'HP: 100', hudStyle
+      45,
+      555,
+      'HP: 100',
+      hudStyle
     );
 
     this.killText = this.add.text(
-      235, 555, 'Kills: 0',
-      { ...hudStyle, color: '#f5c451' }
+      235,
+      555,
+      'Kills: 0',
+      {
+        ...hudStyle,
+        color: '#f5c451'
+      }
     );
 
     this.timerText = this.add.text(
-      480, 555, 'Time: 90', hudStyle
+      480,
+      555,
+      'Time: 90',
+      hudStyle
     ).setOrigin(0.5, 0);
 
     this.waveText = this.add.text(
-      760, 555, 'Threat: 1',
-      { ...hudStyle, color: '#ffb36b' }
+      760,
+      555,
+      'Threat: 1',
+      {
+        ...hudStyle,
+        color: '#ffb36b'
+      }
     );
 
-    // =========================================
-    // INITIAL SPAWNS & RESTART
-    // =========================================
+    // ======================================
+    // INITIAL SPAWNS
+    // ======================================
 
     for (let i = 0; i < 3; i++) {
       this.spawnSlime();
     }
 
+    // Restart after game ends
     this.input.keyboard.on('keydown-R', () => {
-      if (this.gameOver) this.scene.restart();
+      if (this.gameOver) {
+        this.scene.restart();
+      }
     });
   }
 
-  // =========================================
-  // SELECT DIRECTION FROM MOVEMENT
-  // =========================================
+  // ===================================================
+  // EIGHT-DIRECTION MOVEMENT
+  // ===================================================
 
   getMovementDirection(x, y) {
     if (x === 0 && y === 0) {
       return this.facingDirection;
     }
 
+    if (x === 0 && y < 0) return 'N';
+    if (x > 0 && y < 0) return 'NE';
+    if (x > 0 && y === 0) return 'E';
+    if (x > 0 && y > 0) return 'SE';
     if (x === 0 && y > 0) return 'S';
     if (x < 0 && y > 0) return 'SW';
+    if (x < 0 && y === 0) return 'W';
+    if (x < 0 && y < 0) return 'NW';
 
-    // Temporary fallback until the other
-    // six directions have artwork.
-    return 'SW';
+    return this.facingDirection;
   }
 
-  // =========================================
-  // DIFFICULTY
-  // =========================================
+  // ===================================================
+  // DIFFICULTY PROGRESSION
+  // ===================================================
 
   getProgress() {
     return Phaser.Math.Clamp(
-      this.elapsedMs / (SETTINGS.duration * 1000),
-      0, 1
+      this.elapsedMs /
+        (SETTINGS.duration * 1000),
+      0,
+      1
     );
   }
 
@@ -333,9 +434,9 @@ class DefenseScene extends Phaser.Scene {
     );
   }
 
-  // =========================================
-  // SPAWN SLIME
-  // =========================================
+  // ===================================================
+  // SPAWN GREEN SLIME
+  // ===================================================
 
   spawnSlime() {
     if (this.gameOver) return;
@@ -343,73 +444,113 @@ class DefenseScene extends Phaser.Scene {
     if (
       this.slimes.countActive(true) >=
       SETTINGS.maxSlimes
-    ) return;
+    ) {
+      return;
+    }
 
     const side = Phaser.Math.Between(0, 3);
-    let x, y;
+
+    let x;
+    let y;
 
     switch (side) {
       case 0:
         x = Phaser.Math.Between(55, 905);
         y = 90;
         break;
+
       case 1:
         x = Phaser.Math.Between(55, 905);
         y = 520;
         break;
+
       case 2:
         x = 55;
         y = Phaser.Math.Between(90, 520);
         break;
+
       default:
         x = 905;
         y = Phaser.Math.Between(90, 520);
+        break;
     }
 
-    const slime = this.slimes.create(x, y, 'slime');
+    const slime = this.slimes.create(
+      x,
+      y,
+      'slime'
+    );
 
     slime.setScale(1.3);
+
     slime.body.setSize(34, 26);
     slime.body.setOffset(11, 19);
+
     slime.setCollideWorldBounds(true);
+
     slime.setData('hp', SETTINGS.slimeHP);
     slime.setData('knockbackUntil', 0);
     slime.setData('defeated', false);
+
     slime.play('slime-move');
   }
 
-  // =========================================
-  // SWORD ATTACK
-  // =========================================
+  // ===================================================
+  // START SWORD ATTACK
+  // ===================================================
 
   attack(targetX, targetY) {
-    if (this.gameOver || this.isAttacking) return;
+    if (
+      this.gameOver ||
+      this.isAttacking
+    ) {
+      return;
+    }
 
     const now = this.time.now;
 
-    if (now - this.lastAttack < SETTINGS.attackCooldown) {
+    if (
+      now - this.lastAttack <
+      SETTINGS.attackCooldown
+    ) {
       return;
     }
 
     this.lastAttack = now;
+
     this.isAttacking = true;
     this.attackActive = false;
+
     this.hitThisSwing.clear();
 
-    this.facingAngle = Phaser.Math.Angle.Between(
-      this.player.x,
-      this.player.y,
-      targetX,
-      targetY
-    );
+    this.facingAngle =
+      Phaser.Math.Angle.Between(
+        this.player.x,
+        this.player.y,
+        targetX,
+        targetY
+      );
 
     this.player.play('engineer-attack');
   }
 
+  // ===================================================
+  // DRAW VISIBLE 360-DEGREE ATTACK HITBOX
+  // ===================================================
+
   drawAttackIndicator() {
     this.attackIndicator.clear();
-    this.attackIndicator.fillStyle(0xf5c451, 0.12);
-    this.attackIndicator.lineStyle(3, 0xf5c451, 0.7);
+
+    this.attackIndicator.fillStyle(
+      0xf5c451,
+      0.12
+    );
+
+    this.attackIndicator.lineStyle(
+      3,
+      0xf5c451,
+      0.7
+    );
 
     this.attackIndicator.fillCircle(
       this.player.x,
@@ -424,46 +565,81 @@ class DefenseScene extends Phaser.Scene {
     );
   }
 
+  // ===================================================
+  // CHECK SWORD HITS
+  // ===================================================
+
   checkSwordHits() {
-    if (this.gameOver || !this.attackActive) return;
+    if (
+      this.gameOver ||
+      !this.attackActive
+    ) {
+      return;
+    }
 
     this.slimes.children.iterate(slime => {
-      if (!slime?.active || slime.getData('defeated')) return;
-      if (this.hitThisSwing.has(slime)) return;
+      if (
+        !slime?.active ||
+        slime.getData('defeated')
+      ) {
+        return;
+      }
 
-      const distance = Phaser.Math.Distance.Between(
-        this.player.x,
-        this.player.y,
-        slime.x,
-        slime.y
-      );
+      // Only one hit per slime per swing
+      if (this.hitThisSwing.has(slime)) {
+        return;
+      }
 
-      if (distance <= SETTINGS.attackRange) {
-        this.hitThisSwing.add(slime);
-
-        const angle = Phaser.Math.Angle.Between(
+      const distance =
+        Phaser.Math.Distance.Between(
           this.player.x,
           this.player.y,
           slime.x,
           slime.y
         );
 
+      if (distance <= SETTINGS.attackRange) {
+        this.hitThisSwing.add(slime);
+
+        const angle =
+          Phaser.Math.Angle.Between(
+            this.player.x,
+            this.player.y,
+            slime.x,
+            slime.y
+          );
+
         this.hitSlime(slime, angle);
       }
     });
   }
 
+  // ===================================================
+  // DAMAGE SLIME
+  // ===================================================
+
   hitSlime(slime, angle) {
-    if (!slime.active || slime.getData('defeated')) return;
+    if (
+      !slime.active ||
+      slime.getData('defeated')
+    ) {
+      return;
+    }
 
     const hp = slime.getData('hp') - 1;
+
     slime.setData('hp', hp);
     slime.setTint(0xff5555);
 
     if (hp <= 0) {
       slime.setData('defeated', true);
+
       this.kills++;
-      this.killText.setText(`Kills: ${this.kills}`);
+
+      this.killText.setText(
+        `Kills: ${this.kills}`
+      );
+
       slime.body.enable = false;
       slime.anims.stop();
 
@@ -473,57 +649,83 @@ class DefenseScene extends Phaser.Scene {
         scaleX: 0.3,
         scaleY: 0.3,
         duration: 180,
-        onComplete: () => slime.destroy()
+        onComplete: () => {
+          slime.destroy();
+        }
       });
 
       return;
     }
 
+    // Knockback
     slime.body.setVelocity(
-      Math.cos(angle) * SETTINGS.knockbackSpeed,
-      Math.sin(angle) * SETTINGS.knockbackSpeed
+      Math.cos(angle) *
+        SETTINGS.knockbackSpeed,
+      Math.sin(angle) *
+        SETTINGS.knockbackSpeed
     );
 
     slime.setData(
       'knockbackUntil',
-      this.time.now + SETTINGS.knockbackDuration
+      this.time.now +
+        SETTINGS.knockbackDuration
     );
 
     this.time.delayedCall(150, () => {
-      if (slime.active) slime.clearTint();
+      if (slime.active) {
+        slime.clearTint();
+      }
     });
   }
 
-  // =========================================
+  // ===================================================
   // PLAYER DAMAGE
-  // =========================================
+  // ===================================================
 
   handlePlayerDamage(player, slime) {
-    if (this.gameOver || slime.getData('defeated')) return;
+    if (
+      this.gameOver ||
+      slime.getData('defeated')
+    ) {
+      return;
+    }
 
     const now = this.time.now;
 
     if (
       now - this.lastDamage <
       SETTINGS.damageInvulnerability
-    ) return;
+    ) {
+      return;
+    }
 
     this.lastDamage = now;
-    this.hp = Math.max(0, this.hp - SETTINGS.contactDamage);
-    this.hpText.setText(`HP: ${this.hp}`);
+
+    this.hp = Math.max(
+      0,
+      this.hp - SETTINGS.contactDamage
+    );
+
+    this.hpText.setText(
+      `HP: ${this.hp}`
+    );
 
     player.setTint(0xff5555);
 
     this.time.delayedCall(180, () => {
-      if (player.active) player.clearTint();
+      if (player.active) {
+        player.clearTint();
+      }
     });
 
-    if (this.hp <= 0) this.finishGame(false);
+    if (this.hp <= 0) {
+      this.finishGame(false);
+    }
   }
 
-  // =========================================
-  // FINISH GAME
-  // =========================================
+  // ===================================================
+  // VICTORY / GAME OVER
+  // ===================================================
 
   finishGame(victory) {
     if (this.gameOver) return;
@@ -531,6 +733,7 @@ class DefenseScene extends Phaser.Scene {
     this.gameOver = true;
     this.isAttacking = false;
     this.attackActive = false;
+
     this.attackIndicator.clear();
 
     this.player.body.setVelocity(0, 0);
@@ -538,6 +741,7 @@ class DefenseScene extends Phaser.Scene {
 
     this.slimes.children.iterate(slime => {
       if (!slime?.active) return;
+
       slime.body.setVelocity(0, 0);
       slime.anims.stop();
     });
@@ -552,29 +756,44 @@ class DefenseScene extends Phaser.Scene {
       Math.floor(survived * 10) +
       (victory ? 1000 : 0);
 
+    // Dark overlay
     this.add.rectangle(
-      WIDTH / 2, HEIGHT / 2,
-      WIDTH, HEIGHT,
-      0x08101f, 0.78
+      WIDTH / 2,
+      HEIGHT / 2,
+      WIDTH,
+      HEIGHT,
+      0x08101f,
+      0.78
     ).setDepth(100);
 
+    // Results panel
     this.add.rectangle(
-      480, 300, 490, 320,
-      0x142238, 0.98
-    ).setStrokeStyle(3, 0xf5c451).setDepth(101);
+      480,
+      300,
+      490,
+      320,
+      0x142238,
+      0.98
+    )
+      .setStrokeStyle(3, 0xf5c451)
+      .setDepth(101);
 
     this.add.text(
-      480, 190,
+      480,
+      190,
       victory ? 'VICTORY!' : 'GAME OVER',
       {
         fontSize: '38px',
-        color: victory ? '#7ee39b' : '#ff7777',
+        color: victory
+          ? '#7ee39b'
+          : '#ff7777',
         fontFamily: 'monospace'
       }
     ).setOrigin(0.5).setDepth(102);
 
     this.add.text(
-      480, 275,
+      480,
+      275,
       [
         `Slimes defeated: ${this.kills}`,
         `Survival time: ${survived.toFixed(1)}s`,
@@ -589,15 +808,24 @@ class DefenseScene extends Phaser.Scene {
       }
     ).setOrigin(0.5).setDepth(102);
 
+    // Play Again button
     const button = this.add.rectangle(
-      480, 385, 210, 48, 0x315b7d
+      480,
+      385,
+      210,
+      48,
+      0x315b7d
     )
       .setStrokeStyle(2, 0x91c9ef)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({
+        useHandCursor: true
+      })
       .setDepth(102);
 
     this.add.text(
-      480, 385, 'PLAY AGAIN',
+      480,
+      385,
+      'PLAY AGAIN',
       {
         fontSize: '21px',
         color: '#ffffff',
@@ -613,10 +841,14 @@ class DefenseScene extends Phaser.Scene {
       button.setFillStyle(0x315b7d);
     });
 
-    button.on('pointerdown', () => this.scene.restart());
+    button.on('pointerdown', () => {
+      this.scene.restart();
+    });
 
     this.add.text(
-      480, 440, 'Press R to restart',
+      480,
+      440,
+      'Press R to restart',
       {
         fontSize: '15px',
         color: '#a8bed1',
@@ -625,14 +857,17 @@ class DefenseScene extends Phaser.Scene {
     ).setOrigin(0.5).setDepth(102);
   }
 
-  // =========================================
-  // MAIN UPDATE LOOP
-  // =========================================
+  // ===================================================
+  // MAIN GAME LOOP
+  // ===================================================
 
   update(time, delta) {
     if (this.gameOver) return;
 
-    // Survival timer
+    // ======================================
+    // SURVIVAL TIMER
+    // ======================================
+
     this.elapsedMs = Math.min(
       SETTINGS.duration * 1000,
       this.elapsedMs + delta
@@ -640,19 +875,34 @@ class DefenseScene extends Phaser.Scene {
 
     const remaining = Math.max(
       0,
-      Math.ceil(SETTINGS.duration - this.elapsedMs / 1000)
+      Math.ceil(
+        SETTINGS.duration -
+        this.elapsedMs / 1000
+      )
     );
 
-    this.timerText.setText(`Time: ${remaining}`);
-    this.waveText.setText(`Threat: ${this.getThreatLevel()}`);
+    this.timerText.setText(
+      `Time: ${remaining}`
+    );
 
-    if (this.elapsedMs >= SETTINGS.duration * 1000) {
+    this.waveText.setText(
+      `Threat: ${this.getThreatLevel()}`
+    );
+
+    if (
+      this.elapsedMs >=
+      SETTINGS.duration * 1000
+    ) {
       this.finishGame(true);
       return;
     }
 
-    // Dynamic slime spawning
+    // ======================================
+    // DYNAMIC SLIME SPAWNING
+    // ======================================
+
     this.spawnElapsedMs += delta;
+
     const interval = this.getSpawnInterval();
 
     let spawned = 0;
@@ -666,87 +916,135 @@ class DefenseScene extends Phaser.Scene {
       spawned++;
     }
 
-    // Movement input
+    // ======================================
+    // MOVEMENT INPUT
+    // ======================================
+
     let x = 0;
     let y = 0;
 
-    if (this.keys.A.isDown || this.cursors.left.isDown) x--;
-    if (this.keys.D.isDown || this.cursors.right.isDown) x++;
-    if (this.keys.W.isDown || this.cursors.up.isDown) y--;
-    if (this.keys.S.isDown || this.cursors.down.isDown) y++;
+    if (
+      this.keys.A.isDown ||
+      this.cursors.left.isDown
+    ) x--;
 
-    const direction = new Phaser.Math.Vector2(x, y).normalize();
+    if (
+      this.keys.D.isDown ||
+      this.cursors.right.isDown
+    ) x++;
+
+    if (
+      this.keys.W.isDown ||
+      this.cursors.up.isDown
+    ) y--;
+
+    if (
+      this.keys.S.isDown ||
+      this.cursors.down.isDown
+    ) y++;
+
+    const movement =
+      new Phaser.Math.Vector2(
+        x,
+        y
+      ).normalize();
 
     this.player.body.setVelocity(
-      direction.x * SETTINGS.playerSpeed,
-      direction.y * SETTINGS.playerSpeed
+      movement.x * SETTINGS.playerSpeed,
+      movement.y * SETTINGS.playerSpeed
     );
 
-    // Directional walking animation
+    // ======================================
+    // EIGHT-DIRECTION WALKING
+    // ======================================
+
     if (!this.isAttacking) {
       if (x !== 0 || y !== 0) {
-        this.facingDirection =
+        const newDirection =
           this.getMovementDirection(x, y);
 
-        const animationKey =
-          `walk-${this.facingDirection}`;
+        this.facingDirection = newDirection;
 
-        if (this.anims.exists(animationKey)) {
-          this.player.anims.play(animationKey, true);
-        } else {
-          this.player.anims.play('walk-SW', true);
-        }
+        this.player.anims.play(
+          `walk-${newDirection}`,
+          true
+        );
       } else {
+        // Hold last facing direction
         this.player.anims.stop();
 
-        const texture =
-          WALK_ART[this.facingDirection]?.texture ||
-          WALK_ART.SW.texture;
-
-        this.player.setTexture(texture, 0);
+        this.player.setTexture(
+          `engineer-${this.facingDirection}`,
+          0
+        );
       }
     }
 
-    // Mouse aiming
-    const pointer = this.input.activePointer;
+    // ======================================
+    // MOUSE AIMING
+    // ======================================
 
-    if (pointer.x >= 0 && pointer.y >= 0) {
-      this.facingAngle = Phaser.Math.Angle.Between(
-        this.player.x,
-        this.player.y,
-        pointer.worldX,
-        pointer.worldY
-      );
+    const pointer =
+      this.input.activePointer;
+
+    if (
+      pointer.x >= 0 &&
+      pointer.y >= 0
+    ) {
+      this.facingAngle =
+        Phaser.Math.Angle.Between(
+          this.player.x,
+          this.player.y,
+          pointer.worldX,
+          pointer.worldY
+        );
     }
 
+    // Space attacks toward cursor
     if (this.keys.SPACE.isDown) {
       this.attack(
-        this.player.x + Math.cos(this.facingAngle) * 100,
-        this.player.y + Math.sin(this.facingAngle) * 100
+        this.player.x +
+          Math.cos(this.facingAngle) * 100,
+        this.player.y +
+          Math.sin(this.facingAngle) * 100
       );
     }
 
-    // Active spinning sword hitbox
+    // ======================================
+    // ACTIVE SWORD HITBOX
+    // ======================================
+
     if (this.attackActive) {
       this.drawAttackIndicator();
       this.checkSwordHits();
     }
 
-    // Slime AI
+    // ======================================
+    // SLIME CHASE AI
+    // ======================================
+
     this.slimes.children.iterate(slime => {
-      if (!slime?.active || slime.getData('defeated')) return;
+      if (
+        !slime?.active ||
+        slime.getData('defeated')
+      ) {
+        return;
+      }
 
       if (
         this.time.now <
         slime.getData('knockbackUntil')
-      ) return;
+      ) {
+        return;
+      }
 
-      const angle = Phaser.Math.Angle.Between(
-        slime.x,
-        slime.y,
-        this.player.x,
-        this.player.y
-      );
+      const angle =
+        Phaser.Math.Angle.Between(
+          slime.x,
+          slime.y,
+          this.player.x,
+          this.player.y
+        );
 
       const speed = this.getSlimeSpeed();
 
@@ -758,15 +1056,17 @@ class DefenseScene extends Phaser.Scene {
   }
 }
 
-// =========================================
+// =====================================================
 // PHASER CONFIGURATION
-// =========================================
+// =====================================================
 
 const config = {
   type: Phaser.AUTO,
   parent: 'app',
+
   width: WIDTH,
   height: HEIGHT,
+
   backgroundColor: '#182337',
   pixelArt: true,
 
@@ -777,7 +1077,9 @@ const config = {
 
   physics: {
     default: 'arcade',
-    arcade: { debug: false }
+    arcade: {
+      debug: false
+    }
   },
 
   scene: DefenseScene
